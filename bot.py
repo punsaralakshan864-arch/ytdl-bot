@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 # ==================== BOT CONFIG ====================
 API_ID = 34635740
 API_HASH = "0508f64706b52d5eb40787e9d6162478"
-BOT_TOKEN = "8992659315:AAGun4TUhwjGY0oSJncWfOGC7bSbQ4I0Utw"
+BOT_TOKEN = "8992659315:AAFhS4gNbT3yAivQjSieBNdZ2bpEHUvr_xM"
 ALLOWED_CHAT_ID = -1004334857415 
 # ====================================================
 

@@ -1,11 +1,4 @@
 import asyncio
-
-try:
-    loop = asyncio.get_event_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
 import os
 import logging
 from pyrogram import Client, filters
@@ -58,31 +51,31 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
     quality = callback_query.data
     url = callback_query.message.reply_to_message.text.strip()
 
-    try:
-        await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
-    except Exception:
-        pass
+    await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
 
-    # Cookies file එක සමඟ yt-dlp options
+    # OAuth2 හරහා YouTube එක සමඟ Authentication කිරීම සඳහා yt-dlp options
     if quality == "audio":
         ydl_opts = {
-            'format': 'bestaudio',
+            'format': 'bestaudio/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
+            'username': 'oauth2',
+            'password': '',
             'quiet': True,
         }
     elif quality == "best":
         ydl_opts = {
-            'format': 'best',
+            'format': 'bestvideo+bestaudio/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
+            'username': 'oauth2',
+            'password': '',
             'quiet': True,
         }
     else:
         ydl_opts = {
-            'format': f'best[height<={quality}]/best',
+            'format': f'bestvideo[height<={quality}]+bestaudio/best[height<={quality}]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
+            'username': 'oauth2',
+            'password': '',
             'quiet': True,
         }
 
@@ -93,10 +86,7 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
             file_path = ydl.prepare_filename(info)
             title = info.get('title', 'YouTube Video')
 
-        try:
-            await callback_query.message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
-        except Exception:
-            pass
+        await callback_query.message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
 
         safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -116,10 +106,7 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
         await callback_query.message.delete()
 
     except Exception as e:
-        try:
-            await callback_query.message.edit_text(f"❌ Download කිරීමේදී දෝෂයක් සිදු විය: {e}")
-        except Exception:
-            pass
+        await callback_query.message.edit_text(f"❌ Download කිරීමේදී දෝෂයක් සිදු විය: {e}")
 
     finally:
         if file_path and os.path.exists(file_path):
@@ -131,4 +118,5 @@ async def main():
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
     loop.run_until_complete(main())

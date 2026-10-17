@@ -60,27 +60,30 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
 
     await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
 
-    # Cookies file එක සමඟ yt-dlp options
+    # Android client simulation සහ cookies සමඟ yt-dlp options
+    common_opts = {
+        'cookiefile': 'cookies.txt',
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'quiet': True,
+    }
+
     if quality == "audio":
         ydl_opts = {
             'format': 'bestaudio',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
-            'quiet': True,
+            **common_opts,
         }
     elif quality == "best":
         ydl_opts = {
             'format': 'best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
-            'quiet': True,
+            **common_opts,
         }
     else:
         ydl_opts = {
             'format': f'best[height<={quality}]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
-            'quiet': True,
+            **common_opts,
         }
 
     file_path = None

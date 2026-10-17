@@ -1,4 +1,11 @@
 import asyncio
+
+try:
+    loop = asyncio.get_event_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
 import os
 import logging
 from pyrogram import Client, filters
@@ -53,11 +60,12 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
 
     await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
 
-    # YouTube Bot Detection මඟහරවා ගැනීමට නිවැරදි කළ options (extractor_args සමඟ)
+    # Cookies සහ Android/Web Client එකතු කළ yt-dlp options
     if quality == "audio":
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'cookiefile': 'cookies.txt',
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
         }
@@ -65,6 +73,7 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
         ydl_opts = {
             'format': 'bestvideo+bestaudio/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'cookiefile': 'cookies.txt',
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
         }
@@ -72,6 +81,7 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
         ydl_opts = {
             'format': f'bestvideo[height<={quality}]+bestaudio/best[height<={quality}]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'cookiefile': 'cookies.txt',
             'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
         }
@@ -115,9 +125,4 @@ async def main():
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
     loop.run_until_complete(main())

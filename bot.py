@@ -77,14 +77,13 @@ def download_media(url: str, quality: str):
         format_selector = "bestaudio/best"
 
     elif quality == "best":
-        format_selector = "best/bestvideo+bestaudio"
+        format_selector = "bv*+ba/b"
 
     elif quality in ("360", "480", "720"):
         format_selector = (
-            f"best[height<={quality}]/"
-            f"bestvideo[height<={quality}]+bestaudio/"
-            f"best"
-        )
+            f"bv*[height<={quality}]+ba/"
+            f"b[height<={quality}]/bv*+ba/b
+            )
 
     else:
         raise ValueError("තෝරාගත් Quality එක වලංගු නැහැ.")

@@ -14,7 +14,7 @@ import yt_dlp
 
 logging.basicConfig(level=logging.INFO)
 
-# ==================== ??? ?????? ====================
+# ==================== BOT CONFIG ====================
 API_ID = 34635740
 API_HASH = "0508f64706b52d5eb40787e9d6162478"
 BOT_TOKEN = "8992659315:AAGun4TUhwjGY0oSJncWfOGC7bSbQ4I0Utw"
@@ -32,20 +32,20 @@ async def ask_quality(client: Client, message: Message):
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("?? 360p", callback_data="360"),
-            InlineKeyboardButton("?? 480p", callback_data="480")
+            InlineKeyboardButton("📥 360p", callback_data="360"),
+            InlineKeyboardButton("📥 480p", callback_data="480")
         ],
         [
-            InlineKeyboardButton("?? 720p HD", callback_data="720"),
-            InlineKeyboardButton("?? Best Quality", callback_data="best")
+            InlineKeyboardButton("📥 720p HD", callback_data="720"),
+            InlineKeyboardButton("📥 Best Quality", callback_data="best")
         ],
         [
-            InlineKeyboardButton("?? Audio Only (MP3)", callback_data="audio")
+            InlineKeyboardButton("🎵 Audio Only (MP3)", callback_data="audio")
         ]
     ])
 
     await message.reply_text(
-        "?? **??????? ??? ?????? Quality ?? ??????:**",
+        "🎬 **කරුණාකර Download කරගැනීමට Quality එක තෝරන්න:**",
         reply_markup=keyboard,
         quote=True
     )
@@ -58,26 +58,28 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
     quality = callback_query.data
     url = callback_query.message.reply_to_message.text.strip()
 
-    await callback_query.message.edit_text(f"? **{quality}** Quality ????? Download ?????? ???????...")
+    await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
 
-    # ????? ??? ?? ??? ???? yt-dlp ??????
+    # Cookies file එක සමඟ yt-dlp options
     if quality == "audio":
         ydl_opts = {
             'format': 'bestaudio',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'cookiefile': 'cookies.txt',
             'quiet': True,
         }
     elif quality == "best":
         ydl_opts = {
             'format': 'best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'cookiefile': 'cookies.txt',
             'quiet': True,
         }
     else:
-        # ????? quality ?? ??????? ?? ?????? ???? ?? ??? ???
         ydl_opts = {
             'format': f'best[height<={quality}]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'cookiefile': 'cookies.txt',
             'quiet': True,
         }
 
@@ -88,7 +90,7 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
             file_path = ydl.prepare_filename(info)
             title = info.get('title', 'YouTube Video')
 
-        await callback_query.message.edit_text("?? Telegram ??? Upload ?????? ???????...")
+        await callback_query.message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
 
         safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -96,19 +98,19 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
             await client.send_audio(
                 chat_id=callback_query.message.chat.id,
                 audio=file_path,
-                caption=f"?? **{safe_title}**\n\nDone! ?"
+                caption=f"🎵 **{safe_title}**\n\nDone! ✨"
             )
         else:
             await client.send_video(
                 chat_id=callback_query.message.chat.id,
                 video=file_path,
-                caption=f"?? **{safe_title}**\n?? Quality: {quality}p\n\nDone! ?"
+                caption=f"🎥 **{safe_title}**\n📊 Quality: {quality}p\n\nDone! ✨"
             )
 
         await callback_query.message.delete()
 
     except Exception as e:
-        await callback_query.message.edit_text(f"? ?????? ???? ???: {e}")
+        await callback_query.message.edit_text(f"❌ Download කිරීමේදී දෝෂයක් සිදු විය: {e}")
 
     finally:
         if file_path and os.path.exists(file_path):
@@ -116,7 +118,7 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
 
 async def main():
     await app.start()
-    print("Bot ?? ???????!...")
+    print("Bot සාර්ථකව Start විය!...")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":

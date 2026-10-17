@@ -53,29 +53,26 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
 
     await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
 
-    # OAuth2 හරහා YouTube එක සමඟ Authentication කිරීම සඳහා yt-dlp options
+    # YouTube Bot Detection මඟහරවා ගැනීමට නිවැරදි කළ options (extractor_args සමඟ)
     if quality == "audio":
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'username': 'oauth2',
-            'password': '',
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
         }
     elif quality == "best":
         ydl_opts = {
             'format': 'bestvideo+bestaudio/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'username': 'oauth2',
-            'password': '',
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
         }
     else:
         ydl_opts = {
             'format': f'bestvideo[height<={quality}]+bestaudio/best[height<={quality}]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'username': 'oauth2',
-            'password': '',
+            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             'quiet': True,
         }
 
@@ -118,5 +115,9 @@ async def main():
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     loop.run_until_complete(main())

@@ -58,32 +58,32 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
     quality = callback_query.data
     url = callback_query.message.reply_to_message.text.strip()
 
-    await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
+    try:
+        await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
+    except Exception:
+        pass
 
-    # Android client simulation සහ cookies සමඟ yt-dlp options
-    common_opts = {
-        'cookiefile': 'cookies.txt',
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'quiet': True,
-    }
-
+    # Cookies file එක සමඟ yt-dlp options
     if quality == "audio":
         ydl_opts = {
             'format': 'bestaudio',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            **common_opts,
+            'cookiefile': 'cookies.txt',
+            'quiet': True,
         }
     elif quality == "best":
         ydl_opts = {
             'format': 'best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            **common_opts,
+            'cookiefile': 'cookies.txt',
+            'quiet': True,
         }
     else:
         ydl_opts = {
             'format': f'best[height<={quality}]/best',
             'outtmpl': 'downloads/%(id)s.%(ext)s',
-            **common_opts,
+            'cookiefile': 'cookies.txt',
+            'quiet': True,
         }
 
     file_path = None
@@ -93,7 +93,10 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
             file_path = ydl.prepare_filename(info)
             title = info.get('title', 'YouTube Video')
 
-        await callback_query.message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
+        try:
+            await callback_query.message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
+        except Exception:
+            pass
 
         safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -113,7 +116,10 @@ async def download_selected_quality(client: Client, callback_query: CallbackQuer
         await callback_query.message.delete()
 
     except Exception as e:
-        await callback_query.message.edit_text(f"❌ Download කිරීමේදී දෝෂයක් සිදු විය: {e}")
+        try:
+            await callback_query.message.edit_text(f"❌ Download කිරීමේදී දෝෂයක් සිදු විය: {e}")
+        except Exception:
+            pass
 
     finally:
         if file_path and os.path.exists(file_path):

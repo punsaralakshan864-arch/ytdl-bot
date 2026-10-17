@@ -17,10 +17,10 @@ from pyrogram.types import (
 
 # ==================== CONFIG ====================
 
-API_ID = int(os.environ["34635740"])
-API_HASH = os.environ["0508f64706b52d5eb40787e9d6162478"]
-BOT_TOKEN = os.environ["8992659315:AAFhS4gNbT3yAivQjSieBNdZ2bpEHUvr_xM"]
-ALLOWED_CHAT_ID = int(os.environ["-1004334857415"])
+API_ID = int(os.environ["API_ID"])
+API_HASH = os.environ["API_HASH"]
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+ALLOWED_CHAT_ID = int(os.environ["ALLOWED_CHAT_ID"])
 
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)

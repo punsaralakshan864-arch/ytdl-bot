@@ -1,128 +1,233 @@
+
 import asyncio
-
-try:
-    loop = asyncio.get_event_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-import os
 import logging
-from pyrogram import Client, filters
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+import os
+from pathlib import Path
+
 import yt_dlp
+from pyrogram import Client, filters
+from pyrogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
+
+# ==================== CONFIG ====================
+
+API_ID = int(os.environ["34635740"])
+API_HASH = os.environ["0508f64706b52d5eb40787e9d6162478"]
+BOT_TOKEN = os.environ["8992659315:AAFhS4gNbT3yAivQjSieBNdZ2bpEHUvr_xM"]
+ALLOWED_CHAT_ID = int(os.environ["-1004334857415"])
+
+DOWNLOAD_DIR = Path("downloads")
+DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# ==================== BOT CONFIG ====================
-API_ID = 34635740
-API_HASH = "0508f64706b52d5eb40787e9d6162478"
-BOT_TOKEN = "8992659315:AAFhS4gNbT3yAivQjSieBNdZ2bpEHUvr_xM"
-ALLOWED_CHAT_ID = -1004334857415 
-# ====================================================
+app = Client(
+    "my_bot_session",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+)
 
-app = Client("my_bot_session", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# ==================== URL HANDLER ====================
 
 @app.on_message(filters.chat(ALLOWED_CHAT_ID) & filters.text)
 async def ask_quality(client: Client, message: Message):
-    url = message.text.strip()
+    url = (message.text or "").strip()
 
-    if not ("youtube.com" in url or "youtu.be" in url):
+    if not (
+        "youtube.com/" in url
+        or "youtu.be/" in url
+    ):
         return
 
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📥 360p", callback_data="360"),
-            InlineKeyboardButton("📥 480p", callback_data="480")
+            InlineKeyboardButton("📥 480p", callback_data="480"),
         ],
         [
             InlineKeyboardButton("📥 720p HD", callback_data="720"),
-            InlineKeyboardButton("📥 Best Quality", callback_data="best")
+            InlineKeyboardButton("📥 Best Quality", callback_data="best"),
         ],
         [
-            InlineKeyboardButton("🎵 Audio Only (MP3)", callback_data="audio")
-        ]
+            InlineKeyboardButton(
+                "🎵 Audio Only (MP3)",
+                callback_data="audio",
+            )
+        ],
     ])
 
     await message.reply_text(
-        "🎬 **කරුණාකර Download කරගැනීමට Quality එක තෝරන්න:**",
+        "🎬 Download කිරීමට Quality එක තෝරන්න:",
         reply_markup=keyboard,
-        quote=True
+        quote=True,
+        parse_mode=None,
     )
 
+
+# ==================== DOWNLOAD FUNCTION ====================
+
+def download_media(url: str, quality: str):
+    if quality == "audio":
+        format_selector = "bestaudio/best"
+
+    elif quality == "best":
+        format_selector = "best/bestvideo+bestaudio"
+
+    elif quality in ("360", "480", "720"):
+        format_selector = (
+            f"best[height<={quality}]/"
+            f"bestvideo[height<={quality}]+bestaudio/"
+            f"best"
+        )
+
+    else:
+        raise ValueError("තෝරාගත් Quality එක වලංගු නැහැ.")
+
+    ydl_opts = {
+        "format": format_selector,
+        "outtmpl": str(DOWNLOAD_DIR / "%(id)s.%(ext)s"),
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "restrictfilenames": True,
+    }
+
+    # Audio සඳහා MP3 conversion එකක් සිදු කරන්න.
+    if quality == "audio":
+        ydl_opts["postprocessors"] = [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }
+        ]
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+
+    video_id = info.get("id")
+    if not video_id:
+        raise RuntimeError("YouTube video ID එක ලබාගත නොහැක.")
+
+    # Merge / conversion එකෙන් පසු ඇති සැබෑ ගොනුව සොයන්න.
+    candidates = [
+        p for p in DOWNLOAD_DIR.glob(f"{video_id}.*")
+        if p.is_file()
+        and not p.name.endswith((".part", ".ytdl"))
+    ]
+
+    if quality == "audio":
+        candidates = [
+            p for p in candidates
+            if p.suffix.lower() == ".mp3"
+        ]
+
+    if not candidates:
+        raise FileNotFoundError(
+            "Download එක අවසන් වුණත් output file එක සොයාගත නොහැක. "
+            "Railway logs පරීක්ෂා කරන්න."
+        )
+
+    file_path = max(candidates, key=lambda p: p.stat().st_mtime)
+    title = info.get("title") or "YouTube Download"
+
+    return str(file_path), title
+
+
+# ==================== QUALITY BUTTON HANDLER ====================
+
 @app.on_callback_query()
-async def download_selected_quality(client: Client, callback_query: CallbackQuery):
-    if callback_query.message.chat.id != ALLOWED_CHAT_ID:
+async def download_selected_quality(
+    client: Client,
+    callback_query: CallbackQuery,
+):
+    message = callback_query.message
+
+    if not message or message.chat.id != ALLOWED_CHAT_ID:
+        await callback_query.answer("මෙම chat එකට අවසර නැහැ.")
         return
 
     quality = callback_query.data
-    url = callback_query.message.reply_to_message.text.strip()
 
-    await callback_query.message.edit_text(f"⏳ **{quality}** Quality එකෙන් Download වෙමින් පවතී...")
+    if quality not in ("360", "480", "720", "best", "audio"):
+        await callback_query.answer("Quality එක වලංගු නැහැ.")
+        return
 
-    # Cookies සහ Android/Web Client එකතු කළ yt-dlp options
-    if quality == "audio":
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-            'quiet': True,
-        }
-    elif quality == "best":
-        ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',
-            'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-            'quiet': True,
-        }
-    else:
-        ydl_opts = {
-            'format': f'bestvideo[height<={quality}]+bestaudio/best[height<={quality}]/best',
-            'outtmpl': 'downloads/%(id)s.%(ext)s',
-            'cookiefile': 'cookies.txt',
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-            'quiet': True,
-        }
+    original_message = message.reply_to_message
 
-    file_path = None
+    if not original_message or not original_message.text:
+        await callback_query.answer("YouTube link එක සොයාගත නොහැක.")
+        return
+
+    url = original_message.text.strip()
+
+    if not ("youtube.com/" in url or "youtu.be/" in url):
+        await callback_query.answer("වලංගු YouTube link එකක් නොවේ.")
+        return
+
+    await callback_query.answer("Download ආරම්භ කරනවා...")
+
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
-            title = info.get('title', 'YouTube Video')
+        await message.edit_text(
+            f"⏳ {quality} Quality එකෙන් Download වෙමින් පවතී..."
+        )
 
-        await callback_query.message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
+        # yt-dlp blocking වැඩසටහන වෙනම thread එකක ධාවනය කරයි.
+        file_path, title = await asyncio.to_thread(
+            download_media, url, quality
+        )
 
-        safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
+        await message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...")
 
         if quality == "audio":
             await client.send_audio(
-                chat_id=callback_query.message.chat.id,
+                chat_id=message.chat.id,
                 audio=file_path,
-                caption=f"🎵 **{safe_title}**\n\nDone! ✨"
+                caption=f"🎵 {title}",
             )
         else:
             await client.send_video(
-                chat_id=callback_query.message.chat.id,
+                chat_id=message.chat.id,
                 video=file_path,
-                caption=f"🎥 **{safe_title}**\n📊 Quality: {quality}p\n\nDone! ✨"
+                caption=f"🎥 {title}\nQuality: {quality}",
             )
 
-        await callback_query.message.delete()
+        await message.delete()
 
-    except Exception as e:
-        await callback_query.message.edit_text(f"❌ Download කිරීමේදී දෝෂයක් සිදු විය: {e}")
+    except Exception as exc:
+        logger.exception("YouTube download/upload failed")
+
+        error_text = str(exc)
+        if len(error_text) > 2500:
+            error_text = error_text[:2500] + "..."
+
+        try:
+            await message.edit_text(
+                "❌ Download කිරීමේදී දෝෂයක් සිදු විය:\n"
+                f"{error_text}"
+            )
+        except Exception:
+            logger.exception("Could not display error to Telegram")
 
     finally:
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
+        # Download කළ output file එක ඉවත් කරන්න.
+        if "file_path" in locals():
+            try:
+                path = Path(file_path)
+                if path.exists():
+                    path.unlink()
+            except OSError:
+                logger.exception("Could not delete downloaded file")
 
-async def main():
-    await app.start()
-    print("Bot සාර්ථකව Start විය!...")
-    await asyncio.Event().wait()
+
+# ==================== START BOT ====================
 
 if __name__ == "__main__":
-    loop.run_until_complete(main())
+    logger.info("Starting Telegram YouTube Downloader Bot...")
+    app.run()

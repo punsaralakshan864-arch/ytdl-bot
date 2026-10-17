@@ -8,12 +8,7 @@ from urllib.parse import urlparse
 
 import yt_dlp
 from pyrogram import Client, filters
-from pyrogram.types import (
-    Message,
-    CallbackQuery,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-)
+from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 # ==================== CONFIG ====================
 
@@ -42,14 +37,15 @@ app = Client(
 # ==================== URL VALIDATION ====================
 
 def is_youtube_url(url: str) -> bool:
-    """Check whether the supplied link belongs to YouTube."""
+    """Return True only for supported YouTube hostnames."""
     url = url.strip()
+    if not url:
+        return False
 
     if not url.startswith(("https://", "http://")):
         url = "https://" + url
 
     host = (urlparse(url).hostname or "").lower()
-
     return (
         host == "youtube.com"
         or host.endswith(".youtube.com")
@@ -63,27 +59,20 @@ def is_youtube_url(url: str) -> bool:
 @app.on_message(filters.chat(ALLOWED_CHAT_ID) & filters.text)
 async def ask_quality(client: Client, message: Message):
     url = (message.text or "").strip()
-
     if not is_youtube_url(url):
         return
 
-    keyboard = InlineKeyboardMarkup(
+    keyboard = InlineKeyboardMarkup([
         [
-            [
-                InlineKeyboardButton("📥 360p", callback_data="360"),
-                InlineKeyboardButton("📥 480p", callback_data="480"),
-            ],
-            [
-                InlineKeyboardButton("📥 720p HD", callback_data="720"),
-                InlineKeyboardButton("📥 Best Quality", callback_data="best"),
-            ],
-            [
-                InlineKeyboardButton(
-                    "🎵 Audio Only (MP3)", callback_data="audio"
-                )
-            ],
-        ]
-    )
+            InlineKeyboardButton("📥 360p", callback_data="360"),
+            InlineKeyboardButton("📥 480p", callback_data="480"),
+        ],
+        [
+            InlineKeyboardButton("📥 720p HD", callback_data="720"),
+            InlineKeyboardButton("📥 Best Quality", callback_data="best"),
+        ],
+        [InlineKeyboardButton("🎵 Audio Only (MP3)", callback_data="audio")],
+    ])
 
     await message.reply_text(
         "🎬 Download කිරීමට Quality එක තෝරන්න:",
@@ -96,10 +85,7 @@ async def ask_quality(client: Client, message: Message):
 # ==================== DOWNLOAD FUNCTION ====================
 
 def download_media(url: str, quality: str):
-    """
-    Download media in a separate temporary folder.
-    Returns: file path, title, temporary folder path.
-    """
+    """Download media and return (file_path, title, temp_dir)."""
     if quality == "audio":
         format_selector = "bestaudio/best"
     elif quality == "best":
@@ -112,9 +98,7 @@ def download_media(url: str, quality: str):
     else:
         raise ValueError("තෝරාගත් Quality එක වලංගු නැහැ.")
 
-    temp_dir = Path(
-        tempfile.mkdtemp(prefix="download_", dir=str(DOWNLOAD_DIR))
-    )
+    temp_dir = Path(tempfile.mkdtemp(prefix="download_", dir=str(DOWNLOAD_DIR)))
 
     try:
         ydl_opts = {
@@ -125,43 +109,44 @@ def download_media(url: str, quality: str):
             "no_warnings": False,
             "restrictfilenames": True,
             "merge_output_format": "mp4",
-            # Deno may help with YouTube JavaScript challenges if installed.
+            # Deno is installed by the Railway build configuration.
             "js_runtimes": {"deno": {}},
+            # Try YouTube clients that may avoid some bot-check challenges.
+            # This is not guaranteed to bypass YouTube-side restrictions.
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["tv", "web_safari"],
+                }
+            },
+            "socket_timeout": 30,
+            "retries": 2,
+            "fragment_retries": 2,
         }
 
         if quality == "audio":
-            ydl_opts["postprocessors"] = [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }
-            ]
+            ydl_opts["postprocessors"] = [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }]
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
         if not info:
-            raise RuntimeError(
-                "YouTube වෙතින් video තොරතුරු ලබාගත නොහැක."
-            )
+            raise RuntimeError("YouTube වෙතින් video තොරතුරු ලබාගත නොහැක.")
 
         video_id = info.get("id")
         if not video_id:
             raise RuntimeError("YouTube video ID එක ලබාගත නොහැක.")
 
         candidates = [
-            path
-            for path in temp_dir.glob(f"{video_id}.*")
-            if path.is_file()
-            and not path.name.endswith((".part", ".ytdl"))
+            p for p in temp_dir.glob(f"{video_id}.*")
+            if p.is_file() and not p.name.endswith((".part", ".ytdl"))
         ]
 
         if quality == "audio":
-            candidates = [
-                path for path in candidates
-                if path.suffix.lower() == ".mp3"
-            ]
+            candidates = [p for p in candidates if p.suffix.lower() == ".mp3"]
 
         if not candidates:
             raise FileNotFoundError(
@@ -169,9 +154,8 @@ def download_media(url: str, quality: str):
                 "Railway logs පරීක්ෂා කරන්න."
             )
 
-        file_path = max(candidates, key=lambda path: path.stat().st_mtime)
+        file_path = max(candidates, key=lambda p: p.stat().st_mtime)
         title = info.get("title") or "YouTube Download"
-
         return str(file_path), title, str(temp_dir)
 
     except Exception:
@@ -182,10 +166,7 @@ def download_media(url: str, quality: str):
 # ==================== QUALITY BUTTON HANDLER ====================
 
 @app.on_callback_query()
-async def download_selected_quality(
-    client: Client,
-    callback_query: CallbackQuery,
-):
+async def download_selected_quality(client: Client, callback_query: CallbackQuery):
     message = callback_query.message
 
     if not message or message.chat.id != ALLOWED_CHAT_ID:
@@ -193,31 +174,27 @@ async def download_selected_quality(
         return
 
     quality = callback_query.data
-
     if quality not in ("360", "480", "720", "best", "audio"):
         await callback_query.answer("Quality එක වලංගු නැහැ.")
         return
 
     original_message = message.reply_to_message
-
     if not original_message or not original_message.text:
         await callback_query.answer("YouTube link එක සොයාගත නොහැක.")
         return
 
     url = original_message.text.strip()
-
     if not is_youtube_url(url):
         await callback_query.answer("වලංගු YouTube link එකක් නොවේ.")
         return
 
     await callback_query.answer("Download ආරම්භ කරනවා...")
-
     temp_dir = None
 
     try:
-        quality_label = "MP3 Audio" if quality == "audio" else quality
+        label = "MP3 Audio" if quality == "audio" else quality
         await message.edit_text(
-            f"⏳ {quality_label} Quality එකෙන් Download වෙමින් පවතී...",
+            f"⏳ {label} Quality එකෙන් Download වෙමින් පවතී...",
             parse_mode=None,
         )
 
@@ -225,13 +202,9 @@ async def download_selected_quality(
             download_media, url, quality
         )
 
-        await message.edit_text(
-            "📤 Telegram වෙත Upload වෙමින් පවතී...",
-            parse_mode=None,
-        )
+        await message.edit_text("📤 Telegram වෙත Upload වෙමින් පවතී...", parse_mode=None)
 
         safe_title = title[:800]
-
         if quality == "audio":
             await client.send_audio(
                 chat_id=message.chat.id,
@@ -240,8 +213,7 @@ async def download_selected_quality(
                 parse_mode=None,
             )
         else:
-            caption = f"🎥 {safe_title}\nQuality: {quality_label}"
-
+            caption = f"🎥 {safe_title}\nQuality: {label}"
             if Path(file_path).suffix.lower() == ".mp4":
                 await client.send_video(
                     chat_id=message.chat.id,
@@ -261,15 +233,13 @@ async def download_selected_quality(
 
     except Exception as exc:
         logger.exception("YouTube download/upload failed")
-
         error_text = str(exc)
         if len(error_text) > 2500:
             error_text = error_text[:2500] + "..."
 
         try:
             await message.edit_text(
-                "❌ Download කිරීමේදී දෝෂයක් සිදු විය:\n"
-                f"{error_text}",
+                "❌ Download කිරීමේදී දෝෂයක් සිදු විය:\n" + error_text,
                 parse_mode=None,
             )
         except Exception:
